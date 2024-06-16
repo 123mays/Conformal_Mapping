@@ -1,5 +1,3 @@
-% main.m
-
 addpath(pwd);
 
 % Parameters
@@ -13,18 +11,17 @@ isovalue = 0.5; % Isovalue for surface extraction
 
 % Paths to files
 trkPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/100k_whole_brain_tracts.trk';
-niftiPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/b0_LAI.nii.gz';
+niftiPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/nodif_brain_mask.nii.gz';
 outputPath = 'binarized_image_with_boundaries.nii';
 
-
-% Load and binarize Nifti file
-[binary_image, voxDim] = load_and_binarize_nifti(niftiPath, 0.5);
+% Load Nifti file without binarizing
+[image_data, voxDim] = load_nifti(niftiPath);
 
 % Extract the surface
-[faces, vertices] = isosurface(binary_image, isovalue);
+[faces, vertices] = isosurface(image_data, isovalue);
 
 % Initialize grid and padding parameters
-[gridSize_wPadding, sx, sy, sz] = initialize_grid(size(binary_image), Padding);
+[gridSize_wPadding, sx, sy, sz] = initialize_grid(size(image_data), Padding);
 
 % Process vertices with padding
 points = process_vertices(vertices, Padding);
@@ -40,9 +37,6 @@ shapeCenter = shapeCenter_woPad + Padding / 2;
 
 % Assign potential to outside points
 voxData = assign_potential_outside_points(voxData, sx, sy, sz, potential_multiplier);
-
-% Save the binarized image back to a Nifti file
-save_binarized_image(niftiPath, binary_image, outputPath);
 
 % Save the voxel data with boundaries
 save_voxel_data_as_nifti(voxData, 'voxel_data_with_boundaries.nii');
@@ -61,7 +55,13 @@ figure();
 hold on;
 grid on;
 plot3(boundVox(:, 1), boundVox(:, 2), boundVox(:, 3), '.');
+% Plot Figure
+figure();
+hold on;
+grid on;
+plot3(boundVox(:, 1), boundVox(:, 2), boundVox(:, 3), '.');
 plot3(shapeCenter(1), shapeCenter(2), shapeCenter(3), 'r*');
+
 for k = 1:step_size:length(track_cell_result)
     a = track_cell_result{k};
     plot3(a(:, 1), a(:, 2), a(:, 3));
@@ -80,13 +80,12 @@ Image = fullfile(pwd, 'trk_QC.png');
 
 disp('Processing completed successfully');
 
-%Functions 
 
+% Functions
 
-function [binary_image, voxDim] = load_and_binarize_nifti(niftiPath, threshold)
+function [image_data, voxDim] = load_nifti(niftiPath)
     nii = load_nii(niftiPath);
     image_data = nii.img;
-    binary_image = image_data > threshold;
     voxDim = nii.hdr.dime.pixdim(2:4);
 end
 
@@ -98,7 +97,7 @@ function [gridSize_wPadding, sx, sy, sz] = initialize_grid(gridSize, Padding)
 end
 
 function points = process_vertices(vertices, Padding)
-    points = round(vertices + Padding / 2); % Ensure points are integers
+    points = round(vertices + Padding / 2); 
 end
 
 function voxData = create_data_structure(points, sx, sy, sz, potential_multiplier)
@@ -162,12 +161,6 @@ function voxData = assign_potential_outside_points(voxData, sx, sy, sz, potentia
             end
         end
     end
-end
-
-function save_binarized_image(niftiPath, binary_image, outputFileName)
-    nii = load_nii(niftiPath);
-    nii.img = binary_image;
-    save_nii(nii, outputFileName);
 end
 
 function save_voxel_data_as_nifti(voxData, outputFileName)
