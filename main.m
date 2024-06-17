@@ -6,8 +6,8 @@ potential_multiplier = 1;
 length_threshold_max = 230; % Example value, adjust as needed
 length_threshold_min = 35; 
 step_size = 500; 
-shapeCenter_woPad = [50, 50, 50]; %couldn't find the file to determine the actual value
-isovalue = 0.5; % Isovalue for surface extraction
+shapeCenter_woPad = [50, 50, 50];
+isovalue = 0.5;     % Isovalue for surface extraction
 
 % Paths to files
 trkPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/100k_whole_brain_tracts.trk';
@@ -32,6 +32,9 @@ voxData = create_data_structure(points, sx, sy, sz, potential_multiplier);
 % Mark Boundary Voxels
 [voxData, boundVox] = mark_boundary_voxels(voxData, sx, sy, sz, potential_multiplier);
 
+% Apply imclose to fill the brain shape in parallel
+voxData = apply_imclose_parallel(voxData, sx, sy, sz);
+
 % Update ShapeCenter
 shapeCenter = shapeCenter_woPad + Padding / 2;
 
@@ -55,7 +58,7 @@ figure();
 hold on;
 grid on;
 plot3(boundVox(:, 1), boundVox(:, 2), boundVox(:, 3), '.');
-% Plot Figure
+
 figure();
 hold on;
 grid on;
@@ -79,7 +82,6 @@ saveas(gcf, fullfile(pwd, 'trk_QC.fig'));
 Image = fullfile(pwd, 'trk_QC.png');
 
 disp('Processing completed successfully');
-
 
 % Functions
 
@@ -151,6 +153,19 @@ function [voxData, boundVox] = mark_boundary_voxels(voxData, sx, sy, sz, potenti
     end
 end
 
+function voxData = apply_imclose_parallel(voxData, sx, sy, sz)
+    % Apply imclose operation in parallel to each 2D slice along the third dimension
+    se = strel('sphere', 2); % Structuring element
+    mask = (voxData(:,:,:,1) > 1); % Assuming brain mask has values > 1
+    
+    % Parallel processing of imclose on 2D slices
+    parfor k = 1:sz
+        mask(:,:,k) = imclose(mask(:,:,k), se);
+    end
+    
+    voxData(:,:,:,1) = voxData(:,:,:,1) .* mask;
+end
+
 function voxData = assign_potential_outside_points(voxData, sx, sy, sz, potential_multiplier)
     for i = 1:sx
         for j = 1:sy
@@ -172,7 +187,7 @@ end
 
 function voxData = MarkBoundaryVer4(voxData, sx, sy, sz, temp_flag_val)
     mask = (voxData(:,:,:,2) == temp_flag_val);
-    for i = 1:sx
+    parfor i = 1:sx
         for j = 1:sy
             k_vals = find(mask(i,j,:));
             if ~isempty(k_vals)
@@ -185,7 +200,7 @@ function voxData = MarkBoundaryVer4(voxData, sx, sy, sz, temp_flag_val)
             end
         end
     end
-    for i = 1:sx
+    parfor i = 1:sx
         for k = 1:sz
             j_vals = find(mask(i,:,k));
             if ~isempty(j_vals)
@@ -198,7 +213,7 @@ function voxData = MarkBoundaryVer4(voxData, sx, sy, sz, temp_flag_val)
             end
         end
     end
-    for j = 1:sy
+    parfor j = 1:sy
         for k = 1:sz
             i_vals = find(mask(:,j,k));
             if ~isempty(i_vals)
