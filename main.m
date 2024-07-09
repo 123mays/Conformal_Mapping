@@ -18,7 +18,7 @@ stepSizeforStreamLines = 20; % Density of streamlines; increase the number for f
 trkPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/100k_whole_brain_tracts.trk';
 niftiPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/nodif_brain_mask.nii.gz';
 
-% Load Nifti file without binarizing
+% Load Nifti file without binarizingendPoints_strLines
 [image_data, voxDim] = load_nifti(niftiPath);
 
 % Extract the surface
@@ -37,7 +37,7 @@ voxData = create_data_structure(points, sx, sy, sz, potential_multiplier);
 voxData = apply_imclose_parallel(voxData, sx, sy, sz);
 
 % Mark Boundary Voxels
-[voxData, boundVox, count_BoundVox] = process_voxel_data(voxData, sx, sy, sz, potential_multiplier);
+[voxData, boundVox, count_BoundVox] = process_voxel_data2(voxData, sx, sy, sz, potential_multiplier, gridSize_wPadding);
 
 % Update ShapeCenter
 shapeCenter = shapeCenter_woPad + Padding / 2;
