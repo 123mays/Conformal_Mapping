@@ -1,18 +1,22 @@
 addpath(pwd);
+addpaths();
+addpath('./functions');
+clc;
 
 % Parameters
 Padding = [20, 20, 20];
 potential_multiplier = 1;
 length_threshold_max = 230; % Example value, adjust as needed
-length_threshold_min = 35; 
-step_size = 500; 
+length_threshold_min = 35;
+step_size = 500;
 shapeCenter_woPad = [50, 50, 50];
 isovalue = 0.5;     % Isovalue for surface extraction
+eps=1e-4; % Accuracy of the computation lower it for increased accuracy = lowered from 1e-1 for more accuracy
+stepSizeforStreamLines = 20; % Density of streamlines; increase the number for faster computations
 
 % Paths to files
 trkPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/100k_whole_brain_tracts.trk';
 niftiPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/nodif_brain_mask.nii.gz';
-outputPath = 'binarized_image_with_boundaries.nii';
 
 % Load Nifti file without binarizing
 [image_data, voxDim] = load_nifti(niftiPath);
@@ -29,11 +33,11 @@ points = process_vertices(vertices, Padding);
 % Create Data Structure
 voxData = create_data_structure(points, sx, sy, sz, potential_multiplier);
 
-% Mark Boundary Voxels
-[voxData, boundVox] = mark_boundary_voxels(voxData, sx, sy, sz, potential_multiplier);
-
 % Apply imclose to fill the brain shape in parallel
 voxData = apply_imclose_parallel(voxData, sx, sy, sz);
+
+% Mark Boundary Voxels
+[voxData, boundVox, count_BoundVox] = process_voxel_data(voxData, sx, sy, sz, potential_multiplier);
 
 % Update ShapeCenter
 shapeCenter = shapeCenter_woPad + Padding / 2;
@@ -76,168 +80,136 @@ zlabel('z');
 ylabel('y');
 
 % Save figures in the current directory
-saveas(gcf, fullfile(pwd, 'trk_QC.png'), 'png');
-saveas(gcf, fullfile(pwd, 'trk_QC.fig'));
+% saveas(gcf, fullfile(pwd, 'trk_QC.png'), 'png');
+% saveas(gcf, fullfile(pwd, 'trk_QC.fig'));
 
 Image = fullfile(pwd, 'trk_QC.png');
 
 disp('Processing completed successfully');
 
-% Functions
+% Call the LaplaceSolver function
+voxData = LaplaceSolver(voxData, shapeCenter, gridSize_wPadding, eps);
 
-function [image_data, voxDim] = load_nifti(niftiPath)
-    nii = load_nii(niftiPath);
-    image_data = nii.img;
-    voxDim = nii.hdr.dime.pixdim(2:4);
+% Apply ODESolver function
+%[streamlines] = ODESolver(voxData, boundVox, count_BoundVox, stepSizeforStreamLines, shapeCenter);
+
+%ComputePointsonSphere;
+
+% Create 2D Contour Map Visualization
+create_2d_contour_map(voxData, sx, sy, sz);
+
+function create_2d_contour_map(voxData, sx, sy, sz)
+    % Choose the plane to slice (for example, the middle slice in z-direction)
+    slice_index = round(sz / 2);
+    
+    % Extract the potential values from the processed voxel data
+    potential_slice = squeeze(voxData(:, :, slice_index, 3));
+
+    % Define the contour levels
+    contour_levels = linspace(min(potential_slice(:)), max(potential_slice(:)), 20);
+
+    % Create a figure for the 2D contour map
+    figure;
+    hold on;
+
+    % Plot the filled contour map
+    contourf(potential_slice, contour_levels, 'LineColor', 'none');
+
+    % Add colorbar and labels
+    colorbar;
+    colormap(jet);
+    caxis([min(contour_levels) max(contour_levels)]);
+    title('2D Contour Map of Potential Layers');
+    xlabel('X');
+    ylabel('Y');
+    axis equal;
+    hold off;
 end
 
-function [gridSize_wPadding, sx, sy, sz] = initialize_grid(gridSize, Padding)
-    gridSize_wPadding = gridSize + Padding;
-    sx = gridSize_wPadding(1); 
-    sy = gridSize_wPadding(2); 
-    sz = gridSize_wPadding(3);
-end
+function [streamlines] = ODESolver(voxData, boundVox, sizeBoundVox, stepSizeforStreamLines, shapeCenter)
+    options = odeset('RelTol', 1e-3, 'AbsTol', [1e-6 1e-6 1e-6]);
+    streamlines = cell(sizeBoundVox, 1);
 
-function points = process_vertices(vertices, Padding)
-    points = round(vertices + Padding / 2); 
-end
-
-function voxData = create_data_structure(points, sx, sy, sz, potential_multiplier)
-    TotalNumberOfPoints = size(points, 1);
-    voxData = ones(sx, sy, sz, 5);
-    for i = 1:TotalNumberOfPoints
-        x = points(i, 1); 
-        y = points(i, 2); 
-        z = points(i, 3);
-        if x > 0 && y > 0 && z > 0 && x <= sx && y <= sy && z <= sz
-            voxData(x, y, z, 1) = 2;
-            voxData(x, y, z, 2) = 10;
-            voxData(x, y, z, 3) = rand() * potential_multiplier;
-        end
+    for i = 1:stepSizeforStreamLines:sizeBoundVox
+        vec = boundVox(i, :);
+        tspan = [0 100];
+        [t, streamvec] = ode113(@(t, y) potgrad(t, y, voxData, shapeCenter), tspan, vec, options);
+        streamlines{i} = streamvec;
     end
 end
 
-function [voxData, boundVox] = mark_boundary_voxels(voxData, sx, sy, sz, potential_multiplier)
+function [voxData, boundVox, count_BoundVox] = process_voxel_data(voxData, sx, sy, sz, potential_multiplier)
     temp_flag_val = 10;
-    voxData = MarkBoundaryVer4(voxData, sx, sy, sz, temp_flag_val);
-    boundVox = [];
-    for i = 1:sx
+
+    % Helper function to mark boundaries
+    function voxData = mark_boundaries(voxData, sx, sy, sz, temp_flag_val)
+        mask = (voxData(:,:,:,2) == temp_flag_val);
+
+        for i = 1:sx
+            for j = 1:sy
+                k_vals = find(mask(i,j,:));
+                if ~isempty(k_vals)
+                    Lia = false(sz, 1);
+                    Lia(k_vals) = true;
+                    boundary_up = find(diff(Lia) == 1) + 1;
+                    boundary_down = find(diff(Lia) == -1);
+                    voxData(i,j,boundary_up,2) = 100;
+                    voxData(i,j,boundary_down,2) = 100;
+                end
+            end
+        end
+
+        for i = 1:sx
+            for k = 1:sz
+                j_vals = find(mask(i,:,k));
+                if ~isempty(j_vals)
+                    Lia = false(sy, 1);
+                    Lia(j_vals) = true;
+                    boundary_up = find(diff(Lia) == 1) + 1;
+                    boundary_down = find(diff(Lia) == -1);
+                    voxData(i,boundary_up,k,2) = 100;
+                    voxData(i,boundary_down,k,2) = 100;
+                end
+            end
+        end
+
         for j = 1:sy
             for k = 1:sz
-                if voxData(i, j, k, 2) == 100
-                    voxData(i, j, k, 1) = 3;
-                    voxData(i, j, k, 2) = 10;
-                    voxData(i, j, k, 3) = 1.0 * potential_multiplier;
-                    boundVox = [boundVox; [i, j, k]];
+                i_vals = find(mask(:,j,k));
+                if ~isempty(i_vals)
+                    Lia = false(sx, 1);
+                    Lia(i_vals) = true;
+                    boundary_up = find(diff(Lia) == 1) + 1;
+                    boundary_down = find(diff(Lia) == -1);
+                    voxData(boundary_up,j,k,2) = 100;
+                    voxData(boundary_down,j,k,2) = 100;
                 end
             end
         end
     end
 
-    flags = [3, 4];
-    multipliers = [1.5, 2.0];
-    for f = 1:length(flags)
-        flag = flags(f);
-        voxData = MarkBoundaryVer4(voxData, sx, sy, sz, temp_flag_val);
+    % Initial boundary marking and processing
+    voxData = mark_boundaries(voxData, sx, sy, sz, temp_flag_val);
+    count_BoundVox = 0;
+    boundVox = [];
+    potential_val = 1.0;
+
+    for layer = 1:10  % Increase to 10 layers for more detail
         for i = 1:sx
             for j = 1:sy
                 for k = 1:sz
                     if voxData(i, j, k, 2) == 100
-                        voxData(i, j, k, 1) = flag + 1;
+                        voxData(i, j, k, 1) = 3;
                         voxData(i, j, k, 2) = 10;
-                        voxData(i, j, k, 3) = multipliers(f) * potential_multiplier;
+                        voxData(i, j, k, 3) = potential_val * potential_multiplier;
+                        count_BoundVox = count_BoundVox + 1;
+                        boundVox = [boundVox; [i, j, k]];
                     end
                 end
             end
         end
+        % Increase the potential for the next layer
+        potential_val = potential_val + 0.1;  % Smaller increments for more layers
+        voxData = mark_boundaries(voxData, sx, sy, sz, temp_flag_val);
     end
-end
-
-function voxData = apply_imclose_parallel(voxData, sx, sy, sz)
-    % Apply imclose operation in parallel to each 2D slice along the third dimension
-    se = strel('sphere', 2); % Structuring element
-    mask = (voxData(:,:,:,1) > 1); % Assuming brain mask has values > 1
-    
-    % Parallel processing of imclose on 2D slices
-    parfor k = 1:sz
-        mask(:,:,k) = imclose(mask(:,:,k), se);
-    end
-    
-    voxData(:,:,:,1) = voxData(:,:,:,1) .* mask;
-end
-
-function voxData = assign_potential_outside_points(voxData, sx, sy, sz, potential_multiplier)
-    for i = 1:sx
-        for j = 1:sy
-            for k = 1:sz
-                if voxData(i, j, k, 1) == 1
-                    voxData(i, j, k, 3) = 5 * potential_multiplier;
-                end
-            end
-        end
-    end
-end
-
-function save_voxel_data_as_nifti(voxData, outputFileName)
-    % Create a new NIfTI structure for the voxel data
-    nii = make_nii(voxData(:,:,:,1));
-    % Save the NIfTI file
-    save_nii(nii, outputFileName);
-end
-
-function voxData = MarkBoundaryVer4(voxData, sx, sy, sz, temp_flag_val)
-    mask = (voxData(:,:,:,2) == temp_flag_val);
-    parfor i = 1:sx
-        for j = 1:sy
-            k_vals = find(mask(i,j,:));
-            if ~isempty(k_vals)
-                Lia = false(sz, 1);
-                Lia(k_vals) = true;
-                boundary_up = find(diff(Lia) == 1) + 1;
-                boundary_down = find(diff(Lia) == -1);
-                voxData(i,j,boundary_up,2) = 100;
-                voxData(i,j,boundary_down,2) = 100;
-            end
-        end
-    end
-    parfor i = 1:sx
-        for k = 1:sz
-            j_vals = find(mask(i,:,k));
-            if ~isempty(j_vals)
-                Lia = false(sy, 1);
-                Lia(j_vals) = true;
-                boundary_up = find(diff(Lia) == 1) + 1;
-                boundary_down = find(diff(Lia) == -1);
-                voxData(i,boundary_up,k,2) = 100;
-                voxData(i,boundary_down,k,2) = 100;
-            end
-        end
-    end
-    parfor j = 1:sy
-        for k = 1:sz
-            i_vals = find(mask(:,j,k));
-            if ~isempty(i_vals)
-                Lia = false(sx, 1);
-                Lia(i_vals) = true;
-                boundary_up = find(diff(Lia) == 1) + 1;
-                boundary_down = find(diff(Lia) == -1);
-                voxData(boundary_up,j,k,2) = 100;
-                voxData(boundary_down,j,k,2) = 100;
-            end
-        end
-    end
-end
-
-function track_cell_result = ConvertTrk2Cell(tracks, Padding, voxDim)
-    tracks_cell = cell(length(tracks), 1);
-    for i = 1:1:length(tracks)
-        track_i = tracks(i);
-        % Pad and convert to voxel coordinates
-        b = zeros(track_i.nPoints, 3);
-        for j = 1:track_i.nPoints
-            b(j, :) = track_i.matrix(j, :) ./ voxDim + Padding / 2;
-        end
-        tracks_cell{i} = b;
-    end
-    track_cell_result = tracks_cell;
 end
