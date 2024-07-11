@@ -1,7 +1,7 @@
-function [voxData, boundVox, count_BoundVox] = process_voxel_data2(voxData, sx, sy, sz, potential_multiplier, gridSize_wPadding)
+%function [voxData, boundVox, count_BoundVox] = process_voxel_data2(voxData, sx, sy, sz, potential_multiplier, gridSize_wPadding)
 %% Mark Boundary Voxels
 temp_flag_val=10;
-voxData = MarkBoundary(voxData, sx, sy,sz, temp_flag_val);
+voxData = MarkBoundaryVer4(voxData, sx, sy,sz, temp_flag_val);
 count_BoundVox=0;
 boundVox=[];
 for i = 1:gridSize_wPadding(1)
@@ -23,7 +23,7 @@ end
 % % For the moment not layering the potentials 
 flag = 3;
 temp_flag_val=10;
-voxData = MarkBoundary(voxData, sx, sy,sz, temp_flag_val);
+voxData = MarkBoundaryVer4(voxData, sx, sy,sz, temp_flag_val);
 
 for i = 1:gridSize_wPadding(1)
     for j = 1: gridSize_wPadding(2)
@@ -40,7 +40,7 @@ end
 
 flag = 4;
 temp_flag_val=10;
-voxData = MarkBoundary(voxData, sx, sy,sz,temp_flag_val );
+voxData = MarkBoundaryVer4(voxData, sx, sy,sz,temp_flag_val );
 test3=[];
 for i = 1:gridSize_wPadding(1)
     for j = 1: gridSize_wPadding(2)

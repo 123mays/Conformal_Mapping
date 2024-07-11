@@ -15,14 +15,22 @@ eps=1e-4; % Accuracy of the computation lower it for increased accuracy = lowere
 stepSizeforStreamLines = 20; % Density of streamlines; increase the number for faster computations
 
 % Paths to files
-trkPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/100k_whole_brain_tracts.trk';
-niftiPath = '/Users/maysneiroukh/Documents/MATLAB/WhiteMatterClustering-2024/6616456/nodif_brain_mask.nii.gz';
+trkPath = '/raid/Vikash/Tools/Mays/Conformal_Mapping/functions/WhiteMatterClustering-2024/6616456/100k_whole_brain_tracts.trk';
+niftiPath = '/raid/Vikash/Tools/Mays/Conformal_Mapping/functions/WhiteMatterClustering-2024/6616456/nodif_brain_mask.nii';
 
 % Load Nifti file without binarizingendPoints_strLines
-[image_data, voxDim] = load_nifti(niftiPath);
+[image_data, voxDim, size_img] = load_nifti(niftiPath);
+
+
+% binarize the image
+idx_a = find(image_data > 0);
+[I, J, K] = ind2sub(size_img, idx_a);
+disp('Vertices');
+vertices=[I, J, K];
+
 
 % Extract the surface
-[faces, vertices] = isosurface(image_data, isovalue);
+%[faces, vertices] = isosurface(image_data, isovalue);
 
 % Initialize grid and padding parameters
 [gridSize_wPadding, sx, sy, sz] = initialize_grid(size(image_data), Padding);
@@ -37,7 +45,8 @@ voxData = create_data_structure(points, sx, sy, sz, potential_multiplier);
 voxData = apply_imclose_parallel(voxData, sx, sy, sz);
 
 % Mark Boundary Voxels
-[voxData, boundVox, count_BoundVox] = process_voxel_data2(voxData, sx, sy, sz, potential_multiplier, gridSize_wPadding);
+%[voxData, boundVox, count_BoundVox] = process_voxel_data2(voxData, sx, sy, sz, potential_multiplier, gridSize_wPadding);
+process_voxel_data2
 
 % Update ShapeCenter
 shapeCenter = shapeCenter_woPad + Padding / 2;

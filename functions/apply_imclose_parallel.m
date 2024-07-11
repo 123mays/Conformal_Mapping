@@ -15,4 +15,5 @@ function voxData = apply_imclose_parallel(voxData, sx, sy, sz)
     for k = 1:sz
         voxData(:,:,k,1) = voxData(:,:,k,1) .* new_mask(:,:,k);
     end
+    size(new_mask)
 end
