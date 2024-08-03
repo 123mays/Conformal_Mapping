@@ -1,8 +1,0 @@
-/ifs/loni/faculty/thompson/four_d/sthomopo/Tractography/Vikash/HCP/Volumetric_Parameterization/
-111009
-/ifs/loni/faculty/njahansh/projects/HCP/Preprocessed/jfas_3/tracking_hcp/03_dti/localTrack_1p25mm_wmMask_randSeed2/111009/111009_1p25mm_dti_fa.nii.gz
-/ifs/loni/faculty/thompson/four_d/vgupta/Tools/Documentation_Codes/Volumetric_Parameterization/temp_HCP_output/Flipped_AP/111009/
-/ifs/loni/faculty/thompson/four_d/vgupta/Tools/Documentation_Codes/Volumetric_Parameterization/temp_HCP_output/111009/resaveTrackvis.trk
-/ifs/loni/faculty/thompson/four_d/sthomopo/Tractography/Vikash/HCP/Volumetric_Parameterization/111009/Trk_2_Cell/
-/ifs/loni/faculty/thompson/four_d/sthomopo/Tractography/Vikash/HCP/Volumetric_Parameterization/111009/06_segmented_tracks/
-/ifs/loni/faculty/thompson/four_d/sthomopo/Tractography/Vikash/HCP/Volumetric_Parameterization/111009/SeparateNoisyTracks/
